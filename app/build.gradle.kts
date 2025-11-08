@@ -66,5 +66,5 @@ dependencies {
     implementation(libs.androidx.camera.view)
 
     implementation(libs.google.mlkit.face.detection)
-
+    implementation(libs.androidx.material.icons.extended)
 }

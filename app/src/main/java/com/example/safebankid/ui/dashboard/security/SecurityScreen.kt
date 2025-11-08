@@ -1,0 +1,395 @@
+package com.example.safebankid.ui.dashboard.security
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import com.example.safebankid.ui.dashboard.DashboardViewModel
+
+// --- PESTAÑA 2: SEGURIDAD (Centro de Control) ---
+
+@Composable
+fun SecurityScreen(
+    viewModel: DashboardViewModel // Recibe el ViewModel
+) {
+
+    // 1. Lee el estado de los switches DESDE el ViewModel
+    val uiState by viewModel.uiState.collectAsState()
+
+    // --- MODALES DE SEGURIDAD ---
+
+    // 1. El Modal que pide la contraseña ANTES de una acción
+    if (uiState.isRequirePasswordModalVisible) {
+        RequirePasswordModal(
+            viewModel = viewModel,
+            onDismiss = { viewModel.hideRequirePasswordModal() }
+        )
+    }
+
+    // 2. El Modal para CAMBIAR la contraseña
+    if (uiState.isChangePasswordModalVisible) {
+        ChangePasswordModal(
+            viewModel = viewModel,
+            onDismiss = { viewModel.hideChangePasswordModal() }
+        )
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // --- SECCIÓN DE LOGIN ---
+        item {
+            Text(
+                text = "Seguridad de Inicio",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
+        // 1. Switch Principal: Activar Auth Detector
+        item {
+            SecuritySwitchCard(
+                icon = Icons.Default.Face,
+                title = "Auth Detector (ML)",
+                description = "Verificación facial al abrir la app",
+                isEnabled = uiState.authDetectorEnabled,
+                // CAMBIO: Ahora llama al ViewModel para que pida la contraseña
+                onToggle = { viewModel.onAuthDetectorToggled(it) }
+            )
+        }
+
+        // 2. Switch de Combinar PIN
+        item {
+            SecuritySwitchCard(
+                icon = Icons.Default.Shield,
+                title = "Exigir PIN además de Auth Detector",
+                description = "Doble seguridad: Rostro + PIN",
+                isEnabled = uiState.combinePinEnabled,
+                enabled = uiState.authDetectorEnabled, // Se deshabilita si el switch de arriba está apagado
+                onToggle = { viewModel.onCombinePinToggled(it) }
+            )
+        }
+
+        // --- SECCIÓN DE PRIVACIDAD ---
+        item {
+            Text(
+                text = "Privacidad en la App",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+            )
+        }
+
+        // 3. Switch de Privacy Guard
+        item {
+            SecuritySwitchCard(
+                icon = Icons.Default.Shield,
+                title = "Privacy Guard",
+                description = "Bloquear PIN si alguien espía",
+                isEnabled = uiState.privacyGuardEnabled,
+                onToggle = { viewModel.onPrivacyGuardToggled(it) } // Llama al ViewModel
+            )
+        }
+
+        // --- SECCIÓN DE CUENTA ---
+        item {
+            Text(
+                text = "Cuenta",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+            )
+        }
+
+        // 1. NUEVO BOTÓN para cambiar contraseña
+        item {
+            SecurityActionCard(
+                icon = Icons.Default.Lock,
+                title = "Configurar Contraseña de Respaldo",
+                description = "Se usará si el Auth Detector falla",
+                onClick = { viewModel.showChangePasswordModal() }
+            )
+        }
+
+        // 2. Botón de Re-configurar Rostro (ahora pide contraseña)
+        item {
+            SecurityActionCard(
+                icon = Icons.Default.Face,
+                title = "Re-configurar Rostro",
+                description = "Actualiza tu verificación facial",
+                onClick = {
+                    // TODO: Esta es solo una acción de ejemplo
+                    // viewModel.showReconfigureFaceModal()
+                }
+            )
+        }
+    }
+}
+
+
+// --- NUEVO MODAL: Pedir Contraseña ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RequirePasswordModal(
+    viewModel: DashboardViewModel,
+    onDismiss: () -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var isError by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Acción Segura", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Ingresa tu contraseña de respaldo para continuar",
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
+                )
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it; isError = false },
+                    label = { Text("Contraseña") },
+                    singleLine = true,
+                    isError = isError,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+
+                if (isError) {
+                    Text("Contraseña incorrecta", color = MaterialTheme.colorScheme.error)
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            isLoading = true
+                            isError = false
+                            viewModel.checkPasswordAndExecute(password) { success ->
+                                isLoading = false
+                                if (!success) { isError = true }
+                            }
+                        },
+                        enabled = !isLoading
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Confirmar")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- NUEVO MODAL: Cambiar Contraseña ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChangePasswordModal(
+    viewModel: DashboardViewModel,
+    onDismiss: () -> Unit
+) {
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Cambiar Contraseña", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = currentPassword,
+                    onValueChange = { currentPassword = it; isError = false },
+                    label = { Text("Contraseña Actual") },
+                    singleLine = true,
+                    isError = isError,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("Nueva Contraseña") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    label = { Text("Confirmar Nueva Contraseña") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+
+                if (isError) {
+                    Text("Contraseña actual incorrecta", color = MaterialTheme.colorScheme.error)
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (newPassword != confirmPassword) {
+                                // TODO: Mostrar error de confirmación
+                                return@Button
+                            }
+                            isLoading = true
+                            isError = false
+                            viewModel.changePassword(currentPassword, newPassword) { success ->
+                                isLoading = false
+                                if (!success) { isError = true }
+                            }
+                        },
+                        enabled = !isLoading && newPassword.isNotEmpty() && confirmPassword.isNotEmpty()
+                    ) {
+                        Text("Guardar")
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// --- Composables de Tarjetas de Seguridad (Modificados) ---
+
+@Composable
+fun SecurityActionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        onClick = onClick // La tarjeta entera es clickeable
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp), // Más padding
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Text(description, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+fun SecuritySwitchCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit, // Tu parámetro (este nombre está bien)
+    enabled: Boolean = true
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            )
+            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            }
+            Switch(
+                checked = isEnabled,
+                // --- LA CORRECCIÓN ESTÁ AQUÍ ---
+                // El parámetro del Switch se llama 'onCheckedChange'
+                onCheckedChange = onToggle,
+                // ---------------------------------
+                enabled = enabled
+            )
+        }
+    }
+}

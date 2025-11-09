@@ -1,7 +1,10 @@
 package com.example.safebankid.ui.auth
 
-import androidx.lifecycle.ViewModel
+import android.app.Application // <-- Importar
+import androidx.lifecycle.AndroidViewModel // <-- Cambiar de ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.safebankid.data.local.SecurityPreferences // <-- Importar
+import com.example.safebankid.data.repository.SecurityRepository // <-- Importar
 import com.example.safebankid.services.ml.LivenessState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,11 +12,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// El Rol de Backend completará la lógica con la cámara real
-class AuthViewModel : ViewModel() {
+// CAMBIO: Usar AndroidViewModel para acceder al contexto
+class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<LivenessState>(LivenessState.SearchingFace)
     val uiState: StateFlow<LivenessState> = _uiState
+
+    // Inicializar el repositorio
+    private val preferences = SecurityPreferences(application)
+    private val repository = SecurityRepository(preferences)
 
     /**
      * El Rol de ML llamará a esto cuando el analizador
@@ -41,13 +48,17 @@ class AuthViewModel : ViewModel() {
         // Simula una "grabación" de 3 segundos
         viewModelScope.launch {
             delay(3000)
-            // Simula un éxito
-            _uiState.value = LivenessState.Success
 
-            // Simula un error (puedes probar descomentando esto)
-            // _uiState.value = LivenessState.Error("No se detectó parpadeo. Intenta de nuevo.")
-            // delay(2000)
-            // _uiState.value = LivenessState.SearchingFace
+            // --- ¡NUEVA LÓGICA DE NAVEGACIÓN! ---
+            // 1. Leemos el estado guardado
+            val combinePinEnabled = repository.getInitialSecurityUiState().combinePinEnabled
+
+            // 2. Decidimos el destino
+            if (combinePinEnabled) {
+                _uiState.value = LivenessState.SuccessToPin // Ir al PIN
+            } else {
+                _uiState.value = LivenessState.SuccessToDashboard // Ir al Dashboard
+            }
         }
     }
 }

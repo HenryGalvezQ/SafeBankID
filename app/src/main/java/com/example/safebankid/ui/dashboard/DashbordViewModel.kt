@@ -1,7 +1,11 @@
 package com.example.safebankid.ui.dashboard
 
-import androidx.lifecycle.ViewModel
+// Importaciones necesarias
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.safebankid.data.local.SecurityPreferences
+import com.example.safebankid.data.repository.SecurityRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -25,23 +29,34 @@ data class SecurityUiState(
     val pendingAction: (() -> Unit)? = null
 )
 
-class DashboardViewModel : ViewModel() {
+// 2. CAMBIO: Usa AndroidViewModel para tener acceso al Context
+class DashboardViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(SecurityUiState())
+    // 3. Inicializa el Repositorio y las Preferencias
+    private val preferences = SecurityPreferences(application)
+    private val repository = SecurityRepository(preferences)
+
+    // 4. CAMBIO: Inicializa el estado leyendo desde el Repositorio
+    private val _uiState = MutableStateFlow(repository.getInitialSecurityUiState())
     val uiState = _uiState.asStateFlow()
 
     // --- MANEJO DE SWITCHES (AHORA REQUIEREN CONTRASEÑA) ---
 
     fun onAuthDetectorToggled(isEnabled: Boolean) {
-        // En lugar de cambiarlo, pedimos la contraseña
         _uiState.update {
             it.copy(
                 isRequirePasswordModalVisible = true,
                 pendingAction = {
+                    // 5. CAMBIO: Guarda en disco ANTES de actualizar la UI
+                    repository.setAuthDetectorEnabled(isEnabled)
+                    if (!isEnabled) {
+                        // Lógica de UX: Si apagas el Auth Detector, apaga también la combinación
+                        repository.setCombinePinEnabled(false)
+                    }
+
                     _uiState.update { s ->
                         s.copy(
                             authDetectorEnabled = isEnabled,
-                            // Lógica de UX: Si apagas el Auth Detector, apaga también la combinación
                             combinePinEnabled = if (!isEnabled) false else s.combinePinEnabled
                         )
                     }
@@ -55,6 +70,8 @@ class DashboardViewModel : ViewModel() {
             it.copy(
                 isRequirePasswordModalVisible = true,
                 pendingAction = {
+                    // 6. CAMBIO: Guarda en disco
+                    repository.setCombinePinEnabled(isEnabled)
                     _uiState.update { s -> s.copy(combinePinEnabled = isEnabled) }
                 }
             )
@@ -66,6 +83,8 @@ class DashboardViewModel : ViewModel() {
             it.copy(
                 isRequirePasswordModalVisible = true,
                 pendingAction = {
+                    // 7. CAMBIO: Guarda en disco
+                    repository.setPrivacyGuardEnabled(isEnabled)
                     _uiState.update { s -> s.copy(privacyGuardEnabled = isEnabled) }
                 }
             )
@@ -90,7 +109,8 @@ class DashboardViewModel : ViewModel() {
 
     fun checkPasswordAndExecute(password: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            val success = _uiState.value.mlPassword == password
+            // 8. CAMBIO: Compara contra la contraseña guardada en el repositorio
+            val success = repository.getPassword() == password
             if (success) {
                 _uiState.value.pendingAction?.invoke()
                 hideRequirePasswordModal()
@@ -100,8 +120,14 @@ class DashboardViewModel : ViewModel() {
     }
 
     fun changePassword(current: String, new: String, onResult: (Boolean) -> Unit) {
-        if (_uiState.value.mlPassword == current) {
-            _uiState.update { it.copy(mlPassword = new, isChangePasswordModalVisible = false) }
+        // 9. CAMBIO: Compara contra el repositorio
+        if (repository.getPassword() == current) {
+            // 10. CAMBIO: Guarda la nueva contraseña en el repositorio
+            repository.savePassword(new)
+            _uiState.update { it.copy(
+                mlPassword = new, // Actualiza el estado en memoria
+                isChangePasswordModalVisible = false
+            ) }
             onResult(true)
         } else {
             onResult(false)

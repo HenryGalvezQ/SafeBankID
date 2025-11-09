@@ -24,7 +24,7 @@ class PinViewModel : ViewModel() {
             delay(500) // Simula una comprobación de seguridad
 
             // Lógica de simulación (Backend la reemplazará)
-            if (pin == "1234") {
+            if (pin == "123456") {
                 _uiState.value = PinUiState.SUCCESS
             } else {
                 _uiState.value = PinUiState.ERROR

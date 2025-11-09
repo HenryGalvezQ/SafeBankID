@@ -26,7 +26,7 @@ fun DashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SolesPay", fontWeight = FontWeight.Bold) },
+                title = { Text("SafeBank ID", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { /* TODO */ }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notificaciones")

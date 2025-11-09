@@ -1,6 +1,8 @@
 package com.example.safebankid.ui.dashboard.security
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,14 +11,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.safebankid.ui.dashboard.DashboardViewModel
@@ -144,7 +151,7 @@ fun SecurityScreen(
 }
 
 
-// --- NUEVO MODAL: Pedir Contraseña ---
+// --- NUEVO MODAL: Pedir Contraseña (MODIFICADO) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RequirePasswordModal(
@@ -154,6 +161,9 @@ fun RequirePasswordModal(
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var isError by remember { mutableStateOf(false) }
+
+    // --- 1. Estado para la visibilidad de la contraseña ---
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -178,11 +188,61 @@ fun RequirePasswordModal(
                     label = { Text("Contraseña") },
                     singleLine = true,
                     isError = isError,
-                    visualTransformation = PasswordVisualTransformation()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+
+                    // --- 2. Lógica de visibilidad ---
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+
+                    // --- 3. Icono del "ojo" ---
+                    trailingIcon = {
+                        val image = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                        val description = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
+
+                        Icon(
+                            imageVector = image,
+                            contentDescription = description,
+                            // --- 4. Lógica de "Mantener Presionado" ---
+                            modifier = Modifier.pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        passwordVisible = true
+                                        try {
+                                            awaitRelease()
+                                        } finally {
+                                            passwordVisible = false
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                    }
                 )
 
-                if (isError) {
-                    Text("Contraseña incorrecta", color = MaterialTheme.colorScheme.error)
+                // --- 5. Texto de error y "¿Olvidaste contraseña?" ---
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    if (isError) {
+                        Text(
+                            text = "Contraseña incorrecta",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.align(Alignment.CenterStart)
+                        )
+                    }
+
+                    Text(
+                        text = "¿Olvidaste la contraseña?",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .clickable(onClick = { /* No hace nada */ })
+                    )
                 }
 
                 Spacer(Modifier.height(24.dp))
@@ -218,7 +278,7 @@ fun RequirePasswordModal(
     }
 }
 
-// --- NUEVO MODAL: Cambiar Contraseña ---
+// --- NUEVO MODAL: Cambiar Contraseña (MODIFICADO) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChangePasswordModal(
@@ -230,6 +290,11 @@ fun ChangePasswordModal(
     var confirmPassword by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+
+    // --- 1. Estado para la visibilidad de CADA contraseña ---
+    var currentPasswordVisible by remember { mutableStateOf(false) }
+    var newPasswordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -243,34 +308,110 @@ fun ChangePasswordModal(
                 Text("Cambiar Contraseña", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(16.dp))
 
+                // --- CAMPO 1: Contraseña Actual ---
                 OutlinedTextField(
                     value = currentPassword,
                     onValueChange = { currentPassword = it; isError = false },
                     label = { Text("Contraseña Actual") },
                     singleLine = true,
                     isError = isError,
-                    visualTransformation = PasswordVisualTransformation()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    visualTransformation = if (currentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        val image = if (currentPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                        Icon(
+                            imageVector = image,
+                            contentDescription = "Mostrar/Ocultar contraseña actual",
+                            modifier = Modifier.pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        currentPasswordVisible = true
+                                        try { awaitRelease() } finally { currentPasswordVisible = false }
+                                    }
+                                )
+                            }
+                        )
+                    }
                 )
-                Spacer(Modifier.height(8.dp))
+
+                // --- Texto de "¿Olvidaste contraseña?" solo para el campo "Actual" ---
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    if (isError) {
+                        Text(
+                            text = "Contraseña actual incorrecta",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.align(Alignment.CenterStart)
+                        )
+                    }
+                    Text(
+                        text = "¿Olvidaste la contraseña?",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .clickable(onClick = { /* No hace nada */ })
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp)) // Más espacio
+
+                // --- CAMPO 2: Nueva Contraseña ---
                 OutlinedTextField(
                     value = newPassword,
                     onValueChange = { newPassword = it },
                     label = { Text("Nueva Contraseña") },
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        val image = if (newPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                        Icon(
+                            imageVector = image,
+                            contentDescription = "Mostrar/Ocultar nueva contraseña",
+                            modifier = Modifier.pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        newPasswordVisible = true
+                                        try { awaitRelease() } finally { newPasswordVisible = false }
+                                    }
+                                )
+                            }
+                        )
+                    }
                 )
                 Spacer(Modifier.height(8.dp))
+
+                // --- CAMPO 3: Confirmar Nueva Contraseña ---
                 OutlinedTextField(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it },
                     label = { Text("Confirmar Nueva Contraseña") },
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        val image = if (confirmPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                        Icon(
+                            imageVector = image,
+                            contentDescription = "Mostrar/Ocultar confirmación",
+                            modifier = Modifier.pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        confirmPasswordVisible = true
+                                        try { awaitRelease() } finally { confirmPasswordVisible = false }
+                                    }
+                                )
+                            }
+                        )
+                    }
                 )
 
-                if (isError) {
-                    Text("Contraseña actual incorrecta", color = MaterialTheme.colorScheme.error)
-                }
+                // (Quitamos el 'if (isError)' de aquí, ya lo pusimos arriba)
 
                 Spacer(Modifier.height(24.dp))
 
@@ -306,7 +447,7 @@ fun ChangePasswordModal(
 }
 
 
-// --- Composables de Tarjetas de Seguridad (Modificados) ---
+// --- Composables de Tarjetas de Seguridad (Sin cambios) ---
 
 @Composable
 fun SecurityActionCard(

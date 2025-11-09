@@ -1,14 +1,22 @@
 package com.example.safebankid.ui.fallback
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -23,10 +31,25 @@ fun FallbackPasswordScreen(
     val uiState by viewModel.uiState.collectAsState()
     val isError = uiState == PasswordUiState.ERROR
 
+    // --- 1. Estado para la visibilidad de la contraseña ---
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    // --- NAVEGACIÓN EN ÉXITO (MODIFICADA) ---
     LaunchedEffect(uiState) {
-        if (uiState == PasswordUiState.SUCCESS) {
-            navController.navigate("dashboard") {
-                popUpTo("auth") { inclusive = true } // Limpia el stack
+        when (uiState) {
+            // Si el destino es Dashboard, limpiamos "auth" del stack
+            PasswordUiState.SUCCESS_TO_DASHBOARD -> {
+                navController.navigate("dashboard") {
+                    popUpTo("auth") { inclusive = true } // Limpia el stack
+                }
+            }
+            // Si el destino es PIN, NO limpiamos "auth"
+            // El stack será: auth -> fallbackPassword -> pin -> dashboard
+            PasswordUiState.SUCCESS_TO_PIN -> {
+                navController.navigate("pin")
+            }
+            else -> {
+                // No hacer nada en otros estados
             }
         }
     }
@@ -53,17 +76,69 @@ fun FallbackPasswordScreen(
             onValueChange = { password = it },
             label = { Text("Contraseña") },
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth(),
             isError = isError,
-            modifier = Modifier.fillMaxWidth()
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+
+            // --- 2. Lógica de visibilidad ---
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+
+            // --- 3. Icono del "ojo" ---
+            trailingIcon = {
+                val image = if (passwordVisible)
+                    Icons.Filled.VisibilityOff
+                else
+                    Icons.Filled.Visibility
+
+                val description = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
+
+                Icon(
+                    imageVector = image,
+                    contentDescription = description,
+                    // --- 4. Lógica de "Mantener Presionado" ---
+                    modifier = Modifier.pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                // Inicia al presionar
+                                passwordVisible = true
+                                try {
+                                    // Espera a que se suelte el dedo
+                                    awaitRelease()
+                                } finally {
+                                    // Vuelve a ocultar al soltar
+                                    passwordVisible = false
+                                }
+                            }
+                        )
+                    }
+                )
+            }
         )
 
-        if (isError) {
+        // --- 5. Texto de error y "¿Olvidaste contraseña?" ---
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            if (isError) {
+                Text(
+                    text = "Contraseña incorrecta",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
+            }
+
+            // --- 6. Texto de "Olvidaste contraseña" ---
             Text(
-                "Contraseña incorrecta",
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 8.dp)
+                text = "¿Olvidaste la contraseña?",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .clickable(onClick = { /* No hace nada, como pediste */ })
             )
         }
 

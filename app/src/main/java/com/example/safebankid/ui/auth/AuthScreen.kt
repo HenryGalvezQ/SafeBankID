@@ -59,11 +59,22 @@ fun AuthScreen(
 
     val uiState by authViewModel.uiState.collectAsState()
 
-    // --- NAVEGACIÓN EN ÉXITO ---
+    // --- NAVEGACIÓN EN ÉXITO (MODIFICADA) ---
     LaunchedEffect(uiState) {
-        if (uiState is LivenessState.Success) {
-            navController.navigate("dashboard") {
-                popUpTo("auth") { inclusive = true } // Limpia el stack
+        when (uiState) {
+            // Si el destino es Dashboard, limpiamos "auth" del stack
+            is LivenessState.SuccessToDashboard -> {
+                navController.navigate("dashboard") {
+                    popUpTo("auth") { inclusive = true } // Limpia el stack
+                }
+            }
+            // Si el destino es PIN, NO limpiamos "auth"
+            // El stack será: auth -> pin -> dashboard
+            is LivenessState.SuccessToPin -> {
+                navController.navigate("pin")
+            }
+            else -> {
+                // No hacer nada en otros estados
             }
         }
     }
@@ -145,7 +156,8 @@ fun GuidePanel(
                 "Parpadea lentamente. No te muevas.",
                 MaterialTheme.colorScheme.primary
             )
-            is LivenessState.Success -> Triple(
+            // Lógica de éxito actualizada
+            is LivenessState.SuccessToDashboard, is LivenessState.SuccessToPin -> Triple(
                 "¡Verificado!",
                 "Iniciando sesión de forma segura...",
                 Color(0xFF008D41)
@@ -193,7 +205,7 @@ fun CameraPanel(
         // 1. El Círculo de la Cámara
         val borderColor = when (uiState) {
             is LivenessState.FaceFound -> MaterialTheme.colorScheme.primary
-            is LivenessState.Success -> Color(0xFF008D41)
+            is LivenessState.SuccessToDashboard, is LivenessState.SuccessToPin -> Color(0xFF008D41)
             is LivenessState.Error -> MaterialTheme.colorScheme.error
             else -> MaterialTheme.colorScheme.surfaceVariant
         }

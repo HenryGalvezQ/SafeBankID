@@ -32,8 +32,24 @@ fun PinScreen(
     // 1. Escucha el resultado del ViewModel
     LaunchedEffect(uiState) {
         if (uiState == PinUiState.SUCCESS) {
-            navController.navigate("dashboard") {
-                popUpTo("auth") { inclusive = true } // Limpia el stack
+
+            // --- ¡LÓGICA DE NAVEGACIÓN CONDICIONAL! ---
+
+            // Averiguamos de dónde venimos.
+            val previousRoute = navController.previousBackStackEntry?.destination?.route
+
+            if (previousRoute == "auth" || previousRoute == "fallbackPassword") {
+                // Caso 1: Venimos de Auth/Fallback (Auth -> Pin -> Dashboard)
+                // Debemos limpiar el stack HASTA "auth"
+                navController.navigate("dashboard") {
+                    popUpTo("auth") { inclusive = true }
+                }
+            } else {
+                // Caso 2: Esta es la pantalla de inicio (Pin -> Dashboard)
+                // Debemos limpiar el stack HASTA "pin"
+                navController.navigate("dashboard") {
+                    popUpTo("pin") { inclusive = true }
+                }
             }
         }
         if (uiState == PinUiState.ERROR) {
@@ -69,9 +85,9 @@ fun PinScreen(
         // 3. Teclado numérico
         NumericKeypad(
             onNumberClick = { num ->
-                if (pin.length < 4) {
+                if (pin.length < 6) {
                     pin += num
-                    if (pin.length == 4) {
+                    if (pin.length == 6) {
                         pinViewModel.validatePin(pin)
                     }
                 }
@@ -92,7 +108,7 @@ fun PinIndicator(length: Int, isError: Boolean) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(24.dp) // Más espacio
     ) {
-        (0..3).forEach { index ->
+        (0..5).forEach { index ->
             Box(
                 modifier = Modifier
                     .size(20.dp) // Ligeramente más pequeño

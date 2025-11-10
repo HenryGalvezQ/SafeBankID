@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -27,7 +28,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.safebankid.ui.dashboard.DashboardViewModel
-
+import com.example.safebankid.data.repository.FaceSample
+import com.example.safebankid.data.repository.SecurityRepository
 // --- PESTAÑA 2: SEGURIDAD (Centro de Control) ---
 
 @Composable
@@ -146,6 +148,20 @@ fun SecurityScreen(
                     // viewModel.showReconfigureFaceModal()
                 }
             )
+        }
+        // --- SECCIÓN DE DEPURACIÓN (solo dev) ---
+        item {
+            Text(
+                text = "Depuración (solo desarrollo)",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+            )
+        }
+        item {
+            // Si expusiste 'repository' como propiedad:
+            FaceDatasetDebugCard(repository = viewModel.repository2)
+            // O si usaste el getter:
+            // FaceDatasetDebugCard(repository = viewModel.getRepository())
         }
     }
 }
@@ -531,6 +547,47 @@ fun SecuritySwitchCard(
                 // ---------------------------------
                 enabled = enabled
             )
+        }
+    }
+}
+
+@Composable
+fun FaceDatasetDebugCard(repository: SecurityRepository) {
+    val samples = remember { mutableStateListOf<FaceSample>() }
+
+    LaunchedEffect(Unit) {
+        samples.clear()
+        samples.addAll(repository.getFaceSamples())
+    }
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Debug dataset facial", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            Text("Muestras guardadas: ${samples.size}")
+
+            Spacer(Modifier.height(12.dp))
+            if (samples.isNotEmpty()) {
+                val last = samples.first()
+                val bmp = remember(last.imgB64) {
+                    com.example.safebankid.services.ml.base64ToBitmap(last.imgB64)
+                }
+                // Mostrar la última muestra 112×112
+                androidx.compose.foundation.Image(
+                    bitmap = bmp.asImageBitmap(),
+                    contentDescription = "Última muestra",
+                    modifier = Modifier.size(112.dp)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text("ts=${last.ts}  rot=${last.rot}  (${last.w}x${last.h})",
+                    style = MaterialTheme.typography.bodySmall)
+            } else {
+                Text("No hay muestras todavía", style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }

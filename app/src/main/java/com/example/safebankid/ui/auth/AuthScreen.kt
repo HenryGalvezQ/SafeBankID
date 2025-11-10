@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.safebankid.services.ml.LivenessState
 import kotlinx.coroutines.flow.collectLatest
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
 fun AuthScreen(
@@ -58,6 +59,7 @@ fun AuthScreen(
     }
 
     val uiState by authViewModel.uiState.collectAsState()
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     // --- NAVEGACIÓN EN ÉXITO (MODIFICADA) ---
     LaunchedEffect(uiState) {
@@ -101,7 +103,10 @@ fun AuthScreen(
                 uiState = uiState,
                 onVerifyClicked = { authViewModel.onVerifyClicked() },
                 // CAMBIO: La acción ahora navega a la nueva pantalla
-                onUseFallbackClicked = { navController.navigate("fallbackPassword") }
+                onUseFallbackClicked = { navController.navigate("fallbackPassword") } ,
+                onPreviewReady = { previewView ->
+                    authViewModel.attachCamera(previewView, lifecycleOwner)
+                }
             )
 
         } else {
@@ -192,7 +197,8 @@ fun CameraPanel(
     modifier: Modifier = Modifier,
     uiState: LivenessState,
     onVerifyClicked: () -> Unit,
-    onUseFallbackClicked: () -> Unit, // CAMBIO de nombre
+    onUseFallbackClicked: () -> Unit,
+    onPreviewReady: (PreviewView) -> Unit // <- NUEVO
 ) {
     Column(
         modifier = modifier
@@ -222,10 +228,7 @@ fun CameraPanel(
         ) {
             CameraView(
                 modifier = Modifier.fillMaxSize(),
-                onViewReady = {
-                    // TODO: Conectar esto al CameraManager del Rol de ML
-                    // authViewModel.startCamera(previewView, lifecycleOwner)
-                }
+                onViewReady = onPreviewReady
             )
         }
 

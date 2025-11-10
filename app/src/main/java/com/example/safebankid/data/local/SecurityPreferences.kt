@@ -10,6 +10,8 @@ private const val KEY_AUTH_DETECTOR_ENABLED = "auth_detector_enabled"
 private const val KEY_COMBINE_PIN_ENABLED = "combine_pin_enabled"
 private const val KEY_PRIVACY_GUARD_ENABLED = "privacy_guard_enabled"
 private const val KEY_ML_PASSWORD = "ml_password"
+private const val KEY_VERIFICATION_HISTORY = "verification_history"
+private const val KEY_FACE_SAMPLES = "face_samples_json"
 
 /**
  * Esta clase maneja la lectura y escritura en EncryptedSharedPreferences.
@@ -65,5 +67,47 @@ class SecurityPreferences(context: Context) {
 
     fun setPassword(password: String) {
         sharedPreferences.edit().putString(KEY_ML_PASSWORD, password).apply()
+    }
+    fun appendVerificationLog(success: Boolean, reason: String?) {
+        val now = System.currentTimeMillis()
+        val sp = sharedPreferences
+        val current = sp.getString(KEY_VERIFICATION_HISTORY, "[]") ?: "[]"
+        val arr = org.json.JSONArray(current)
+        val obj = org.json.JSONObject()
+            .put("ts", now)
+            .put("ok", success)
+            .put("reason", reason)
+
+        arr.put(obj)
+
+        // Conservamos las últimas 50
+        val trimmed = org.json.JSONArray()
+        val start = kotlin.math.max(0, arr.length() - 50)
+        for (i in start until arr.length()) trimmed.put(arr.get(i))
+
+        sp.edit().putString(KEY_VERIFICATION_HISTORY, trimmed.toString()).apply()
+    }
+
+    fun getVerificationHistoryJson(): String =
+        sharedPreferences.getString(KEY_VERIFICATION_HISTORY, "[]") ?: "[]"
+
+    fun appendFaceSampleJson(sampleJson: String, maxKeep: Int = 5) {
+        val current = sharedPreferences.getString(KEY_FACE_SAMPLES, "[]") ?: "[]"
+        val arr = org.json.JSONArray(current)
+        arr.put(org.json.JSONObject(sampleJson))
+
+        // Conserva solo las últimas 'maxKeep' muestras
+        val trimmed = org.json.JSONArray()
+        val start = kotlin.math.max(0, arr.length() - maxKeep)
+        for (i in start until arr.length()) trimmed.put(arr.get(i))
+
+        sharedPreferences.edit().putString(KEY_FACE_SAMPLES, trimmed.toString()).apply()
+    }
+
+    fun getFaceSamplesJson(): String =
+        sharedPreferences.getString(KEY_FACE_SAMPLES, "[]") ?: "[]"
+
+    fun clearFaceSamples() {
+        sharedPreferences.edit().remove(KEY_FACE_SAMPLES).apply()
     }
 }

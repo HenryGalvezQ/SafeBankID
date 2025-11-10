@@ -35,7 +35,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     // 3. Inicializa el Repositorio y las Preferencias
     private val preferences = SecurityPreferences(application)
     private val repository = SecurityRepository(preferences)
-
+    val repository2: SecurityRepository = repository
     // 4. CAMBIO: Inicializa el estado leyendo desde el Repositorio
     private val _uiState = MutableStateFlow(repository.getInitialSecurityUiState())
     val uiState = _uiState.asStateFlow()

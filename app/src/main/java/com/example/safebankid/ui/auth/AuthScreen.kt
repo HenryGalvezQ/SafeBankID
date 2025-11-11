@@ -26,11 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.safebankid.services.ml.LivenessState
-import kotlinx.coroutines.flow.collectLatest
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.compose.currentBackStackEntryAsState
 
 @Composable
 fun AuthScreen(
@@ -40,77 +39,79 @@ fun AuthScreen(
     val context = LocalContext.current
     var hasCameraPermission by rememberSaveable {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                    PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
         )
     }
 
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val mode = backStackEntry?.arguments?.getString("mode")
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted: Boolean ->
-            hasCameraPermission = isGranted
-        }
+        onResult = { isGranted -> hasCameraPermission = isGranted }
     )
 
-    SideEffect {
+    LaunchedEffect(mode) {
+        if (mode == "enroll") {
+            authViewModel.startEnrollment(samples = 15)
+        }
+    }
+
+    LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
     val uiState by authViewModel.uiState.collectAsState()
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val lastSimilarity by authViewModel.lastSimilarity.collectAsState(initial = null)
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // --- NAVEGACIÓN EN ÉXITO (MODIFICADA) ---
     LaunchedEffect(uiState) {
         when (uiState) {
-            // Si el destino es Dashboard, limpiamos "auth" del stack
             is LivenessState.SuccessToDashboard -> {
                 navController.navigate("dashboard") {
-                    popUpTo("auth") { inclusive = true } // Limpia el stack
+                    popUpTo("auth") { inclusive = true }
                 }
             }
-            // Si el destino es PIN, NO limpiamos "auth"
-            // El stack será: auth -> pin -> dashboard
             is LivenessState.SuccessToPin -> {
                 navController.navigate("pin")
             }
-            else -> {
-                // No hacer nada en otros estados
+            is LivenessState.EnrollmentDone -> {
+                // después de entrenar, vuelve al dashboard
+                navController.navigate("dashboard") {
+                    popUpTo("dashboard") { inclusive = false }
+                }
             }
+            else -> Unit
         }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background), // Fondo blanco
+            .background(MaterialTheme.colorScheme.background),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (hasCameraPermission) {
-
-            // --- 1. Panel Superior: Guía ---
             GuidePanel(
-                // CAMBIO: Menos peso para la guía (más arriba)
                 modifier = Modifier.weight(0.8f),
-                uiState = uiState
+                uiState = uiState,
+                lastSimilarity = lastSimilarity
             )
-
-            // --- 2. Panel Inferior: Cámara y Acción ---
             CameraPanel(
-                // CAMBIO: Más peso para la cámara (más grande)
                 modifier = Modifier.weight(1.2f),
                 uiState = uiState,
                 onVerifyClicked = { authViewModel.onVerifyClicked() },
-                // CAMBIO: La acción ahora navega a la nueva pantalla
-                onUseFallbackClicked = { navController.navigate("fallbackPassword") } ,
+                onUseFallbackClicked = { navController.navigate("fallbackPassword") },
                 onPreviewReady = { previewView ->
                     authViewModel.attachCamera(previewView, lifecycleOwner)
                 }
             )
-
         } else {
-            // UI si el permiso fue denegado
             PermissionDeniedContent(
                 modifier = Modifier.fillMaxSize(),
                 onRequestPermission = {
@@ -124,17 +125,17 @@ fun AuthScreen(
 @Composable
 fun GuidePanel(
     modifier: Modifier = Modifier,
-    uiState: LivenessState
+    uiState: LivenessState,
+    lastSimilarity: Float? = null
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center // Centra todo
+        verticalArrangement = Arrangement.Center
     ) {
 
-        // 1. El "GIF" (usamos un icono por ahora)
         Icon(
             imageVector = Icons.Default.FaceRetouchingNatural,
             contentDescription = "Guía de parpadeo",
@@ -144,16 +145,15 @@ fun GuidePanel(
 
         Spacer(Modifier.height(24.dp))
 
-        // 2. El Texto de Guía (Mejorado)
         val (title, text, color) = when (uiState) {
             is LivenessState.SearchingFace -> Triple(
-                "Centra tu Rostro",
+                "Centra tu rostro",
                 "Posiciona tu rostro en el círculo de abajo.",
                 MaterialTheme.colorScheme.onBackground
             )
             is LivenessState.FaceFound -> Triple(
                 "¡Excelente!",
-                "Presiona 'Verificar' para iniciar la grabación y parpadear.",
+                "Presiona “Verificar” para iniciar.",
                 MaterialTheme.colorScheme.primary
             )
             is LivenessState.AnalyzingBlink -> Triple(
@@ -161,14 +161,30 @@ fun GuidePanel(
                 "Parpadea lentamente. No te muevas.",
                 MaterialTheme.colorScheme.primary
             )
-            // Lógica de éxito actualizada
-            is LivenessState.SuccessToDashboard, is LivenessState.SuccessToPin -> Triple(
-                "¡Verificado!",
-                "Iniciando sesión de forma segura...",
+            is LivenessState.Enrollment -> Triple(
+                "Entrenando rostro",
+                "Muestra ${uiState.current + 1} de ${uiState.total}. Parpadea.",
+                MaterialTheme.colorScheme.primary
+            )
+            is LivenessState.EnrollmentDone -> Triple(
+                "Rostro actualizado",
+                "Ya puedes volver a la app.",
                 Color(0xFF008D41)
             )
+            is LivenessState.SuccessToDashboard,
+            is LivenessState.SuccessToPin -> Triple(
+                "¡Verificado!",
+                "Iniciando sesión segura...",
+                Color(0xFF008D41)
+            )
+            // 👇 ESTA era la que te faltaba
+            is LivenessState.RequireFallback -> Triple(
+                "Verificación adicional",
+                "Usa tu contraseña de respaldo.",
+                MaterialTheme.colorScheme.tertiary
+            )
             is LivenessState.Error -> Triple(
-                "Error en la Verificación",
+                "Error en la verificación",
                 uiState.message,
                 MaterialTheme.colorScheme.error
             )
@@ -187,8 +203,21 @@ fun GuidePanel(
             color = color,
             fontSize = 18.sp,
             textAlign = TextAlign.Center,
-            modifier = Modifier.height(48.dp) // Altura fija para evitar saltos
+            modifier = Modifier.height(48.dp)
         )
+
+        // mostrar similitud solo si tenemos un valor
+        if (lastSimilarity != null &&
+            (uiState is LivenessState.Error || uiState is LivenessState.FaceFound)
+        ) {
+            Spacer(Modifier.height(8.dp))
+            val percent = (lastSimilarity * 100f).toInt()
+            Text(
+                text = "Similitud: $percent%",
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
 }
 
@@ -198,29 +227,29 @@ fun CameraPanel(
     uiState: LivenessState,
     onVerifyClicked: () -> Unit,
     onUseFallbackClicked: () -> Unit,
-    onPreviewReady: (PreviewView) -> Unit // <- NUEVO
+    onPreviewReady: (PreviewView) -> Unit
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly // Distribuye el espacio
+        verticalArrangement = Arrangement.SpaceEvenly
     ) {
 
-        // 1. El Círculo de la Cámara
         val borderColor = when (uiState) {
             is LivenessState.FaceFound -> MaterialTheme.colorScheme.primary
-            is LivenessState.SuccessToDashboard, is LivenessState.SuccessToPin -> Color(0xFF008D41)
+            is LivenessState.SuccessToDashboard,
+            is LivenessState.SuccessToPin -> Color(0xFF008D41)
             is LivenessState.Error -> MaterialTheme.colorScheme.error
             else -> MaterialTheme.colorScheme.surfaceVariant
         }
 
         Box(
             modifier = Modifier
-                .size(260.dp) // CAMBIO: Círculo más grande
+                .size(260.dp)
                 .clip(CircleShape)
-                .background(Color.Black) // Fondo negro por si la cámara tarda en cargar
+                .background(Color.Black)
                 .border(
                     BorderStroke(6.dp, borderColor),
                     CircleShape
@@ -232,29 +261,27 @@ fun CameraPanel(
             )
         }
 
-        // 2. Columna de Botones
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Button(
                 onClick = onVerifyClicked,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                // Se habilita solo cuando se encuentra un rostro
-                enabled = uiState is LivenessState.FaceFound
+                enabled = uiState is LivenessState.FaceFound ||
+                        uiState is LivenessState.Error ||
+                        uiState is LivenessState.Enrollment // también en entrenamiento
             ) {
                 Text("Verificar", fontSize = 18.sp)
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // CAMBIO: El texto y la acción del botón de fallback
             TextButton(onClick = onUseFallbackClicked) {
                 Text("Usar Contraseña de Respaldo")
             }
         }
     }
 }
-
 
 @Composable
 fun CameraView(
@@ -284,17 +311,14 @@ fun PermissionDeniedContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Text("Permiso de cámara requerido", textAlign = TextAlign.Center)
         Text(
-            text = "Permiso de Cámara Requerido",
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = "SafeBank ID necesita acceso a la cámara para verificar tu identidad.",
+            "SafeBank ID necesita acceso a la cámara para verificar tu identidad.",
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRequestPermission) {
-            Text("Conceder Permiso")
+            Text("Conceder permiso")
         }
     }
 }

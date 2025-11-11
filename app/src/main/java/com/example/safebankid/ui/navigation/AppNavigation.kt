@@ -3,9 +3,11 @@ package com.example.safebankid.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.safebankid.data.local.SecurityPreferences
 import com.example.safebankid.data.repository.SecurityRepository
 import com.example.safebankid.ui.auth.AuthScreen
@@ -21,24 +23,21 @@ import com.example.safebankid.ui.pin.PinViewModel
 fun AppNavigation() {
     val navController = rememberNavController()
 
-    // --- LÓGICA DE INICIO (CORREGIDA) ---
+    // --- lógica para decidir pantalla inicial ---
     val context = LocalContext.current
-
     val securityPreferences = SecurityPreferences(context)
     val securityRepository = SecurityRepository(securityPreferences)
-
     val isAuthDetectorEnabled = securityRepository.getInitialSecurityUiState().authDetectorEnabled
 
-    // Decidimos la ruta de inicio dinámicamente
     val startDestination = if (isAuthDetectorEnabled) {
-        "auth" // Si está ON, vamos a la verificación facial
+        "auth"
     } else {
-        "pin"  // <-- ¡ESTA ES LA CORRECCIÓN! Si está OFF, vamos al PIN.
+        "pin"
     }
-    // ------------------------------------------
 
     NavHost(navController = navController, startDestination = startDestination) {
 
+        // login facial normal
         composable("auth") {
             val authViewModel: AuthViewModel = viewModel()
             AuthScreen(
@@ -47,7 +46,25 @@ fun AppNavigation() {
             )
         }
 
-        // El PIN de 6 dígitos sigue existiendo para "Privacy Guard"
+        // login facial en modo enrolamiento (cuando vienes de "Re-configurar Rostro")
+        composable(
+            route = "auth?mode={mode}",
+            arguments = listOf(
+                navArgument("mode") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) {
+            val authViewModel: AuthViewModel = viewModel()
+            AuthScreen(
+                navController = navController,
+                authViewModel = authViewModel
+            )
+        }
+
+        // PIN
         composable("pin") {
             val pinViewModel: PinViewModel = viewModel()
             PinScreen(
@@ -56,7 +73,7 @@ fun AppNavigation() {
             )
         }
 
-        // Esta ruta es solo para el *respaldo* desde la pantalla "auth"
+        // contraseña de respaldo
         composable("fallbackPassword") {
             val passwordViewModel: FallbackPasswordViewModel = viewModel()
             FallbackPasswordScreen(
@@ -65,9 +82,13 @@ fun AppNavigation() {
             )
         }
 
+        // dashboard (👈 aquí estaba el error)
         composable("dashboard") {
             val dashboardViewModel: DashboardViewModel = viewModel()
-            DashboardScreen(viewModel = dashboardViewModel)
+            DashboardScreen(
+                navController = navController,
+                viewModel = dashboardViewModel
+            )
         }
     }
 }

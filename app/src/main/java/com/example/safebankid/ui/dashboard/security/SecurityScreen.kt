@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.navigation.NavController
 import com.example.safebankid.ui.dashboard.DashboardViewModel
 import com.example.safebankid.data.repository.FaceSample
 import com.example.safebankid.data.repository.SecurityRepository
@@ -34,6 +35,7 @@ import com.example.safebankid.data.repository.SecurityRepository
 
 @Composable
 fun SecurityScreen(
+    navController: NavController,
     viewModel: DashboardViewModel // Recibe el ViewModel
 ) {
 
@@ -144,8 +146,7 @@ fun SecurityScreen(
                 title = "Re-configurar Rostro",
                 description = "Actualiza tu verificación facial",
                 onClick = {
-                    // TODO: Esta es solo una acción de ejemplo
-                    // viewModel.showReconfigureFaceModal()
+                    viewModel.showRequirePasswordModal(navController)
                 }
             )
         }

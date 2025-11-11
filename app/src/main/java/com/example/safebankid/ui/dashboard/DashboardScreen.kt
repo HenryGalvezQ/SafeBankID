@@ -12,13 +12,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import com.example.safebankid.ui.dashboard.home.HomeScreen
 import com.example.safebankid.ui.dashboard.security.SecurityScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
-    // 1. Recibe el ViewModel
+    navController: NavController,                 // 👈 lo recibimos aquí
     viewModel: DashboardViewModel = viewModel()
 ) {
     var selectedTab by rememberSaveable { mutableStateOf("Home") }
@@ -28,40 +29,36 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("SafeBank ID", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = { /* TODO */ }) {
+                    IconButton(onClick = { /* ... */ }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notificaciones")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                }
             )
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ) {
+            NavigationBar {
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                    icon = { Icon(Icons.Default.Home, null) },
                     label = { Text("Home") },
                     selected = selectedTab == "Home",
                     onClick = { selectedTab = "Home" }
                 )
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Security, contentDescription = "Seguridad") },
+                    icon = { Icon(Icons.Default.Security, null) },
                     label = { Text("Seguridad") },
                     selected = selectedTab == "Seguridad",
                     onClick = { selectedTab = "Seguridad" }
                 )
             }
         }
-    ) { paddingValues ->
-
-        // 2. Contenido modularizado
-        Box(modifier = Modifier.padding(paddingValues)) {
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
             when (selectedTab) {
                 "Home" -> HomeScreen()
-                "Seguridad" -> SecurityScreen(viewModel = viewModel) // 3. Pasa el ViewModel
+                "Seguridad" -> SecurityScreen(
+                    navController = navController, // 👈 aquí lo pasamos
+                    viewModel = viewModel
+                )
             }
         }
     }

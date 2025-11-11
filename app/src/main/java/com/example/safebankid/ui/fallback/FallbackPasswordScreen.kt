@@ -24,32 +24,27 @@ import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun FallbackPasswordScreen(
-    navController: NavController,
-    viewModel: FallbackPasswordViewModel = viewModel()
+    navController: NavController, // Lo quitaremos, pero lo dejamos por ahora
+    viewModel: FallbackPasswordViewModel = viewModel(),
+    // --- 1. NUEVO CALLBACK ---
+    onSuccess: (PasswordUiState) -> Unit
 ) {
     var password by remember { mutableStateOf("") }
     val uiState by viewModel.uiState.collectAsState()
     val isError = uiState == PasswordUiState.ERROR
-
-    // --- 1. Estado para la visibilidad de la contraseña ---
     var passwordVisible by remember { mutableStateOf(false) }
 
-    // --- NAVEGACIÓN EN ÉXITO (MODIFICADA) ---
+    // --- 2. LÓGICA DE NAVEGACIÓN MODIFICADA ---
     LaunchedEffect(uiState) {
         when (uiState) {
-            // Si el destino es Dashboard, limpiamos "auth" del stack
-            PasswordUiState.SUCCESS_TO_DASHBOARD -> {
-                navController.navigate("dashboard") {
-                    popUpTo("auth") { inclusive = true } // Limpia el stack
-                }
-            }
-            // Si el destino es PIN, NO limpiamos "auth"
-            // El stack será: auth -> fallbackPassword -> pin -> dashboard
+            // Si el estado es de éxito (CUALQUIERA de los dos)...
+            PasswordUiState.SUCCESS_TO_DASHBOARD,
             PasswordUiState.SUCCESS_TO_PIN -> {
-                navController.navigate("pin")
+                // ...en lugar de navegar, ¡llamamos al callback!
+                onSuccess(uiState)
             }
             else -> {
-                // No hacer nada en otros estados
+                // No hacer nada en otros estados (IDLE, LOADING, ERROR)
             }
         }
     }

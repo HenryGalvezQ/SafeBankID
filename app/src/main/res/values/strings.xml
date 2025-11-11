@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">SafeBankID</string>
+    <string name="accessibility_service_description">Servicio de SafeBank ID para bloquear aplicaciones. Detecta cuándo se abren apps protegidas para requerir verificación facial.</string>
 </resources>

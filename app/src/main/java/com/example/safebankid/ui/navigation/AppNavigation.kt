@@ -12,10 +12,12 @@ import com.example.safebankid.data.local.SecurityPreferences
 import com.example.safebankid.data.repository.SecurityRepository
 import com.example.safebankid.ui.auth.AuthScreen
 import com.example.safebankid.ui.auth.AuthViewModel
+import com.example.safebankid.ui.auth.LivenessState // ¡Importante!
 import com.example.safebankid.ui.dashboard.DashboardScreen
 import com.example.safebankid.ui.dashboard.DashboardViewModel
 import com.example.safebankid.ui.fallback.FallbackPasswordScreen
 import com.example.safebankid.ui.fallback.FallbackPasswordViewModel
+import com.example.safebankid.ui.fallback.PasswordUiState // ¡Importante!
 import com.example.safebankid.ui.pin.PinScreen
 import com.example.safebankid.ui.pin.PinViewModel
 
@@ -42,7 +44,21 @@ fun AppNavigation() {
             val authViewModel: AuthViewModel = viewModel()
             AuthScreen(
                 navController = navController,
-                authViewModel = authViewModel
+                authViewModel = authViewModel,
+                // Implementación para MODO 1 (Banco)
+                onSuccess = { state ->
+                    if (state is LivenessState.SuccessToDashboard) {
+                        navController.navigate("dashboard") {
+                            popUpTo("auth") { inclusive = true }
+                        }
+                    } else if (state is LivenessState.SuccessToPin) {
+                        navController.navigate("pin")
+                    }
+                },
+                // Implementación para MODO 1 (Banco)
+                onNavigateToFallback = {
+                    navController.navigate("fallbackPassword")
+                }
             )
         }
 
@@ -60,7 +76,11 @@ fun AppNavigation() {
             val authViewModel: AuthViewModel = viewModel()
             AuthScreen(
                 navController = navController,
-                authViewModel = authViewModel
+                authViewModel = authViewModel,
+                // El enrolamiento no tiene este flujo de éxito, usa EnrollmentDone
+                onSuccess = { /* No se espera aquí */ },
+                // El enrolamiento no debería tener fallback
+                onNavigateToFallback = { /* No se espera aquí */ }
             )
         }
 
@@ -78,11 +98,23 @@ fun AppNavigation() {
             val passwordViewModel: FallbackPasswordViewModel = viewModel()
             FallbackPasswordScreen(
                 navController = navController,
-                viewModel = passwordViewModel
+                viewModel = passwordViewModel,
+                // Implementación para MODO 1 (Banco)
+                onSuccess = { state ->
+                    if (state == PasswordUiState.SUCCESS_TO_DASHBOARD) {
+                        navController.navigate("dashboard") {
+                            // Limpia el stack HASTA "auth"
+                            popUpTo("auth") { inclusive = true }
+                        }
+                    } else if (state == PasswordUiState.SUCCESS_TO_PIN) {
+                        // Si venimos de fallback a PIN, seguimos el flujo
+                        navController.navigate("pin")
+                    }
+                }
             )
         }
 
-        // dashboard (👈 aquí estaba el error)
+        // dashboard
         composable("dashboard") {
             val dashboardViewModel: DashboardViewModel = viewModel()
             DashboardScreen(

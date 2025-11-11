@@ -33,8 +33,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 
 @Composable
 fun AuthScreen(
-    navController: NavController,
-    authViewModel: AuthViewModel = viewModel()
+    navController: NavController, // Aún se necesita para el fallback y el re-enroll
+    authViewModel: AuthViewModel = viewModel(),
+    // --- 1. ¡NUEVO PARÁMETRO! ---
+    // Esta es la función que se llamará en caso de éxito.
+    onSuccess: (LivenessState) -> Unit,
+    onNavigateToFallback: () -> Unit
 ) {
     val context = LocalContext.current
     var hasCameraPermission by rememberSaveable {
@@ -70,23 +74,23 @@ fun AuthScreen(
     val lastSimilarity by authViewModel.lastSimilarity.collectAsState(initial = null)
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // --- 2. LÓGICA DE NAVEGACIÓN MODIFICADA ---
     LaunchedEffect(uiState) {
-        when (uiState) {
-            is LivenessState.SuccessToDashboard -> {
-                navController.navigate("dashboard") {
-                    popUpTo("auth") { inclusive = true }
-                }
-            }
+        when (val state = uiState) {
+            // Si es éxito (cualquiera de los dos)...
+            is LivenessState.SuccessToDashboard,
             is LivenessState.SuccessToPin -> {
-                navController.navigate("pin")
+                // ...en lugar de navegar, ¡llamamos al callback!
+                onSuccess(state)
             }
             is LivenessState.EnrollmentDone -> {
-                // después de entrenar, vuelve al dashboard
+                // El re-enrolamiento SÍ es una acción interna,
+                // así que esta navegación se queda aquí.
                 navController.navigate("dashboard") {
                     popUpTo("dashboard") { inclusive = false }
                 }
             }
-            else -> Unit
+            else -> Unit // Ignorar otros estados
         }
     }
 
@@ -106,7 +110,8 @@ fun AuthScreen(
                 modifier = Modifier.weight(1.2f),
                 uiState = uiState,
                 onVerifyClicked = { authViewModel.onVerifyClicked() },
-                onUseFallbackClicked = { navController.navigate("fallbackPassword") },
+                // El botón de fallback usa el NavController (¡por eso lo conservamos!)
+                onUseFallbackClicked = onNavigateToFallback,
                 onPreviewReady = { previewView ->
                     authViewModel.attachCamera(previewView, lifecycleOwner)
                 }

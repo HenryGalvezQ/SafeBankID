@@ -1,5 +1,10 @@
 package com.example.safebankid.ui.dashboard.security
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.text.TextUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -8,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AppBlocking
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
@@ -17,8 +23,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -31,6 +39,8 @@ import androidx.navigation.NavController
 import com.example.safebankid.ui.dashboard.DashboardViewModel
 import com.example.safebankid.data.repository.FaceSample
 import com.example.safebankid.data.repository.SecurityRepository
+import com.example.safebankid.services.AppLockerService
+
 // --- PESTAÑA 2: SEGURIDAD (Centro de Control) ---
 
 @Composable
@@ -149,6 +159,17 @@ fun SecurityScreen(
                     viewModel.showRequirePasswordModal(navController)
                 }
             )
+        }
+        item {
+            Text(
+                text = "Protección de Apps (App Locker)",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+            )
+        }
+        item {
+            // Este es el nuevo panel de control para activar el servicio
+            AppLockerPermissionCard()
         }
         // --- SECCIÓN DE DEPURACIÓN (solo dev) ---
         item {
@@ -591,4 +612,84 @@ fun FaceDatasetDebugCard(repository: SecurityRepository) {
             }
         }
     }
+}
+
+@Composable
+fun AppLockerPermissionCard() {
+    val context = LocalContext.current
+
+    // Estos "produceState" verifican el estado actual de los permisos
+    val accessibilityEnabled by produceState(initialValue = false, context) {
+        value = isAccessibilityServiceEnabled(context)
+    }
+    val drawOverlayEnabled by produceState(initialValue = false, context) {
+        value = Settings.canDrawOverlays(context)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AppBlocking, "App Locker", tint = MaterialTheme.colorScheme.primary)
+                Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                    Text("Activar App Locker", fontWeight = FontWeight.Bold)
+                    Text("Protege otras apps (Yape, BCP) con tu rostro.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+
+            // Botón 1: Permiso de Accesibilidad
+            Button(
+                onClick = {
+                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (accessibilityEnabled) Color(0xFF167C16) else MaterialTheme.colorScheme.secondary,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(if (accessibilityEnabled) "1. Servicio de Accesibilidad (✓ Activado)" else "1. Activar Servicio")
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Botón 2: Permiso de Dibujar Encima
+            Button(
+                onClick = {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}")
+                    )
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (drawOverlayEnabled) Color(0xFF167C16) else MaterialTheme.colorScheme.secondary,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(if (drawOverlayEnabled) "2. Dibujar sobre otras apps (✓ Activado)" else "2. Activar Superposición")
+            }
+        }
+    }
+}
+
+// --- AÑADE ESTA FUNCIÓN HELPER AL FINAL DEL ARCHIVO ---
+private fun isAccessibilityServiceEnabled(context: Context): Boolean {
+    val service = "${context.packageName}/${AppLockerService::class.java.canonicalName}"
+    val settingValue = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+    )
+    return settingValue?.let {
+        TextUtils.SimpleStringSplitter(':').apply { setString(it) }
+            .any { s -> s.equals(service, ignoreCase = true) }
+    } ?: false
 }

@@ -185,6 +185,17 @@ fun SecurityScreen(
             // O si usaste el getter:
             // FaceDatasetDebugCard(repository = viewModel.getRepository())
         }
+
+        item {
+            SecurityActionCard(
+                icon = Icons.Default.Face, // O el icono que prefieras
+                title = "Probar Face Mesh (468 Puntos)",
+                description = "Ver la malla 3D de MediaPipe en tiempo real",
+                onClick = {
+                    navController.navigate("meshDebug")
+                }
+            )
+        }
     }
 }
 

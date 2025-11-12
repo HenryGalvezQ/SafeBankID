@@ -36,6 +36,10 @@ class FaceMeshAnalyzer(
 
     private val faceLandmarker: FaceLandmarker
     private val yuvToRgb = YuvToRgbConverter(context)
+    @Volatile private var lastFeatureVec: FloatArray? = null
+    @Volatile private var lastBitmap: Bitmap? = null
+    @Volatile private var lastBbox: android.graphics.Rect? = null
+    fun getLastFeatureVector(): FloatArray? = lastFeatureVec
 
     init {
         val baseOptions = BaseOptions.builder()
@@ -61,6 +65,48 @@ class FaceMeshAnalyzer(
                     frameWidth = lastFrameWidth,
                     frameHeight = lastFrameHeight
                 )
+
+                val facesLandmarks = result.faceLandmarks()
+                if (facesLandmarks.isNotEmpty()) {
+                    val lms = facesLandmarks[0]
+                    val n = lms.size
+                    val xs = FloatArray(n)
+                    val ys = FloatArray(n)
+                    val zs = FloatArray(n)
+
+                    var minX = 1f; var maxX = 0f
+                    var minY = 1f; var maxY = 0f
+
+                    for (i in 0 until n) {
+                        val lm = lms[i]
+                        val x = lms[i].x()
+                        val y = lms[i].y()
+                        val z = lm.z()
+                        xs[i] = x; ys[i] = y; zs[i] = z
+                        if (x < minX) minX = x
+                        if (x > maxX) maxX = x
+                        if (y < minY) minY = y
+                        if (y > maxY) maxY = y
+                    }
+
+                    // 1) vector de features
+                    try {
+                        lastFeatureVec = featuresFromLandmarksXYZ(xs, ys ,zs)
+                    } catch (_: Throwable) { /* ignorar frame malo */ }
+
+                    // 2) bbox en píxeles a partir de [0..1]
+                    val W = lastFrameWidth.coerceAtLeast(1)
+                    val H = lastFrameHeight.coerceAtLeast(1)
+                    val l = (minX * W).toInt().coerceIn(0, W-1)
+                    val t = (minY * H).toInt().coerceIn(0, H-1)
+                    val r = (maxX * W).toInt().coerceIn(l+1, W)
+                    val b = (maxY * H).toInt().coerceIn(t+1, H)
+                    lastBbox = android.graphics.Rect(l, t, r, b)
+                } else {
+                    lastFeatureVec = null
+                    lastBbox = null
+                }
+
             }
             .build()
 
@@ -80,6 +126,8 @@ class FaceMeshAnalyzer(
                 imageProxy.height,
                 Bitmap.Config.ARGB_8888
             )
+            lastBitmap = bitmap
+
             yuvToRgb.yuvToRgb(imageProxy, bitmap)
 
             // MediaPipe usa su propio tipo de imagen
@@ -158,4 +206,22 @@ class FaceMeshAnalyzer(
             }
         }
     }
+
+    fun buildLastFaceSample(): com.example.safebankid.data.repository.FaceSample? {
+        val bmp = lastBitmap ?: return null
+        val box = lastBbox ?: return null
+        val cropped = safeCrop(bmp, box)
+        val normalized = resize112(cropped)
+        val b64 = bitmapToBase64Jpeg(normalized, 70)
+
+        return com.example.safebankid.data.repository.FaceSample(
+            ts = System.currentTimeMillis(),
+            imgB64 = b64,
+            w = lastFrameWidth,
+            h = lastFrameHeight,
+            rot = lastRotation,
+            landmarks = null // (opcional: podrías guardar el vector también)
+        )
+    }
+
 }

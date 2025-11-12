@@ -11,7 +11,8 @@ private const val KEY_PRIVACY_GUARD_ENABLED = "privacy_guard_enabled"
 private const val KEY_ML_PASSWORD = "ml_password"
 private const val KEY_VERIFICATION_HISTORY = "verification_history"
 private const val KEY_FACE_SAMPLES = "face_samples_json"
-
+private const val KEY_LM_SAMPLES = "lm_samples"
+private const val KEY_LM_MODEL = "lm_model"
 /**
  * Esta clase maneja la lectura y escritura en EncryptedSharedPreferences.
  * Es la única clase que sabe "cómo" se guardan los datos.
@@ -107,5 +108,22 @@ class SecurityPreferences(context: Context) {
 
     fun setFaceEmbeddingsJson(json: String) {
         sharedPreferences.edit().putString(KEY_FACE_EMBS, json).apply()
+    }
+    fun getLandmarkSamplesJson(): String =
+        sharedPreferences.getString(KEY_LM_SAMPLES, "[]") ?: "[]"
+
+    fun setLandmarkSamplesJson(json: String) {
+        sharedPreferences.edit().putString(KEY_LM_SAMPLES, json).apply()
+    }
+
+    fun clearLandmarkSamples() {
+        sharedPreferences.edit().remove(KEY_LM_SAMPLES).apply()
+    }
+
+    fun getLandmarkModelJson(): String? =
+        sharedPreferences.getString(KEY_LM_MODEL, null)
+
+    fun setLandmarkModelJson(json: String) {
+        sharedPreferences.edit().putString(KEY_LM_MODEL, json).apply()
     }
 }

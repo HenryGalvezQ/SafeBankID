@@ -11,6 +11,11 @@ import org.json.JSONObject
  * Repositorio que centraliza el acceso a las preferencias de seguridad.
  * El ViewModel hablará con esta clase, no directamente con SharedPreferences.
  */
+data class LandmarkModel(
+    val mean: FloatArray,
+    val varDiag: FloatArray,
+    val threshold: Float
+)
 
 data class FaceSample(
     val ts: Long,
@@ -147,4 +152,53 @@ class SecurityRepository(private val preferences: SecurityPreferences) {
     fun clearFaceEmbeddings() {
         preferences.setFaceEmbeddingsJson("[]")
     }
+
+    // -------- Landmarks tabulares (sin embeddings) --------
+    fun appendLandmarkSample(sample: FloatArray, maxKeep: Int = 80) {
+        val arr = JSONArray(preferences.getLandmarkSamplesJson())
+        // guardamos como JSONArray de floats
+        val one = JSONArray()
+        for (v in sample) one.put(v.toDouble())
+        arr.put(one)
+
+        // rotación FIFO
+        val trimmed = JSONArray()
+        val start = kotlin.math.max(0, arr.length() - maxKeep)
+        for (i in start until arr.length()) trimmed.put(arr.getJSONArray(i))
+        preferences.setLandmarkSamplesJson(trimmed.toString())
+    }
+
+    fun getLandmarkSamples(): List<FloatArray> {
+        val arr = JSONArray(preferences.getLandmarkSamplesJson())
+        val out = ArrayList<FloatArray>(arr.length())
+        for (i in 0 until arr.length()) {
+            val a = arr.getJSONArray(i)
+            val v = FloatArray(a.length())
+            for (j in 0 until a.length()) v[j] = a.getDouble(j).toFloat()
+            out.add(v)
+        }
+        return out
+    }
+
+    fun clearLandmarkSamplesRepo() = preferences.clearLandmarkSamples()
+
+    fun saveLandmarkModel(model: LandmarkModel) {
+        val o = JSONObject()
+            .put("thr", model.threshold.toDouble())
+            .put("mean", JSONArray(model.mean.map { it.toDouble() }))
+            .put("var", JSONArray(model.varDiag.map { it.toDouble() }))
+        preferences.setLandmarkModelJson(o.toString())
+    }
+
+    fun loadLandmarkModel(): LandmarkModel? {
+        val raw = preferences.getLandmarkModelJson() ?: return null
+        val o = JSONObject(raw)
+        val thr = o.getDouble("thr").toFloat()
+        val muA = o.getJSONArray("mean")
+        val vaA = o.getJSONArray("var")
+        val mu = FloatArray(muA.length()) { i -> muA.getDouble(i).toFloat() }
+        val va = FloatArray(vaA.length()) { i -> vaA.getDouble(i).toFloat() }
+        return LandmarkModel(mu, va, thr)
+    }
+
 }

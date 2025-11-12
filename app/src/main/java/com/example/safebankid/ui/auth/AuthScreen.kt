@@ -93,6 +93,7 @@ fun AuthScreen(
             else -> Unit // Ignorar otros estados
         }
     }
+    val sim by authViewModel.lastSimilarity.collectAsState()
 
     Column(
         modifier = Modifier
@@ -105,6 +106,12 @@ fun AuthScreen(
                 modifier = Modifier.weight(0.8f),
                 uiState = uiState,
                 lastSimilarity = lastSimilarity
+            )
+            Text(
+                text = "State: ${uiState::class.simpleName} | sim=${sim?.let { String.format("%.2f", it) } ?: "-"}",
+                color = Color.Gray,
+                modifier = Modifier.padding(8.dp),
+                fontSize = 12.sp
             )
             CameraPanel(
                 modifier = Modifier.weight(1.2f),

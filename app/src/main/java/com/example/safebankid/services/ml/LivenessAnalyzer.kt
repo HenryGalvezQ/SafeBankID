@@ -2,6 +2,7 @@ package com.example.safebankid.services.ml
 
 import android.graphics.Bitmap
 import android.graphics.Rect
+import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -10,11 +11,14 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
+import kotlin.math.max
 import kotlin.math.min
 
 class LivenessAnalyzer(
     private val onFaceCentered: (Boolean) -> Unit,
-    private val onBlinkResult: (Boolean, String?) -> Unit
+    private val onBlinkResult: (Boolean, String?) -> Unit,
+    // NUEVO: brillo promedio [0,1] del recorte de cara
+    private val onBrightnessChanged: (Float) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     private val detector = FaceDetection.getClient(
@@ -43,6 +47,7 @@ class LivenessAnalyzer(
         phase = 0
     }
 
+    @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
         val mediaImage = imageProxy.image ?: run {
             imageProxy.close()
@@ -74,12 +79,16 @@ class LivenessAnalyzer(
                     lastFrameW = imageProxy.width
                     lastFrameH = imageProxy.height
                     lastLandmarks = extractLandmarks(face)
-
+                    // NUEVO: brillo del recorte de cara
+                    val brightness = computeBrightness(rotatedBmp, face.boundingBox)
+                    onBrightnessChanged(brightness)
                     if (verifying) {
                         handleBlink(face)
                     }
                 } else {
                     onFaceCentered(false)
+                    // sin rostro -> asumimos luz baja
+                    onBrightnessChanged(0f)
                     if (verifying && System.currentTimeMillis() > deadlineMs) {
                         verifying = false
                         onBlinkResult(false, "Rostro perdido durante la verificación")
@@ -152,5 +161,30 @@ class LivenessAnalyzer(
         val dx = cx - rx
         val dy = cy - ry
         return (dx * dx + dy * dy) <= radius * radius
+    }
+    // NUEVO: brillo promedio del recorte (submuestreado para que no pese)
+    private fun computeBrightness(bmp: Bitmap, rect: Rect): Float {
+        val cropped = safeCrop(bmp, rect)
+
+        var sum = 0L
+        var count = 0
+        val stepX = max(1, cropped.width / 24)
+        val stepY = max(1, cropped.height / 24)
+
+        for (y in 0 until cropped.height step stepY) {
+            for (x in 0 until cropped.width step stepX) {
+                val pixel = cropped.getPixel(x, y)
+                val r = (pixel shr 16) and 0xFF
+                val g = (pixel shr 8) and 0xFF
+                val b = pixel and 0xFF
+                val luminance = 0.299f * r + 0.587f * g + 0.114f * b
+                sum += luminance.toInt()
+                count++
+            }
+        }
+
+        if (count == 0) return 0f
+        // Normalizamos a [0,1]
+        return sum.toFloat() / (count * 255f)
     }
 }

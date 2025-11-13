@@ -56,15 +56,23 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private var enrollmentMode = false
     private var enrollmentTarget = 0
     private var enrollmentCollected = 0
-
+    // Brillo promedio del recorte de rostro [0,1]
+    private val _brightnessLevel = MutableStateFlow<Float?>(null)
+    val brightnessLevel: StateFlow<Float?> = _brightnessLevel
     init {
         analyzer = LivenessAnalyzer(
             onFaceCentered = { centered ->
-                _uiState.value =
-                    if (centered) LivenessState.FaceFound else LivenessState.SearchingFace
+                // ⬇️ IMPORTANTE: no pisar el estado cuando estamos enrolando
+                if (!enrollmentMode) {
+                    _uiState.value =
+                        if (centered) LivenessState.FaceFound else LivenessState.SearchingFace
+                }
             },
             onBlinkResult = { ok, reason ->
                 handleBlinkResult(ok, reason)
+            },
+            onBrightnessChanged = { value ->
+                _brightnessLevel.value = value
             }
         )
     }

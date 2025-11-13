@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -85,7 +87,14 @@ fun SecurityScreen(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
-
+        item {
+            SecurityLevelSummaryCard(
+                authEnabled = uiState.authDetectorEnabled,
+                pinEnabled = uiState.combinePinEnabled,
+                privacyGuardEnabled = uiState.privacyGuardEnabled
+            )
+            Spacer(Modifier.height(16.dp))
+        }
         // 1. Switch Principal: Activar Auth Detector
         item {
             SecuritySwitchCard(
@@ -188,6 +197,89 @@ fun SecurityScreen(
     }
 }
 
+@Composable
+fun SecurityLevelSummaryCard(
+    authEnabled: Boolean,
+    pinEnabled: Boolean,
+    privacyGuardEnabled: Boolean
+) {
+    val (levelText, levelColor, description) = run {
+        val allOn = authEnabled && pinEnabled && privacyGuardEnabled
+        val level = when {
+            allOn -> "Alta"
+            authEnabled && (pinEnabled || privacyGuardEnabled) -> "Media"
+            else -> "Baja"
+        }
+        val color = when (level) {
+            "Alta" -> Color(0xFF008D41)
+            "Media" -> Color(0xFFFFA000)
+            else -> Color(0xFFD32F2F)
+        }
+        val desc = when (level) {
+            "Alta" -> "Tu SafeBank ID está en modo de máxima protección."
+            "Media" -> "Tienes buena seguridad, pero aún puedes reforzarla."
+            else -> "Activa Auth Detector y el PIN extra para evitar accesos no autorizados."
+        }
+        Triple(level, color, desc)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "Nivel de seguridad",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(levelColor.copy(alpha = 0.12f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Seguridad $levelText",
+                        color = levelColor,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = "Recomendado para apps financieras: Seguridad ALTA (Auth Detector + PIN + Privacy Guard).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
 // --- NUEVO MODAL: Pedir Contraseña (MODIFICADO) ---
 @OptIn(ExperimentalMaterial3Api::class)

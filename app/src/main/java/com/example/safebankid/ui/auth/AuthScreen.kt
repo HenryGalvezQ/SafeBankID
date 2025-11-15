@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlinx.coroutines.delay
 
 @Composable
 fun AuthScreen(
@@ -84,7 +85,18 @@ fun AuthScreen(
 
     val brightness by authViewModel.brightnessLevel.collectAsState(initial = null)
     val lifecycleOwner = LocalLifecycleOwner.current
-
+    // Auto-verificación: en login (no enrolamiento) empezamos la verificación
+    // apenas el rostro está centrado.
+    LaunchedEffect(uiState, isEnrollmentFlow) {
+        if (!isEnrollmentFlow && uiState is LivenessState.FaceFound) {
+            // Esperar un poquito para que el usuario vea "Rostro detectado"
+            delay(500L)
+            // Si después de ese tiempo sigue en FaceFound, recién disparamos la verificación
+            if (uiState is LivenessState.FaceFound) {
+                authViewModel.onVerifyClicked()
+            }
+        }
+    }
     // --- 2. LÓGICA DE NAVEGACIÓN MODIFICADA ---
     LaunchedEffect(uiState) {
         when (val state = uiState) {
@@ -122,7 +134,16 @@ fun AuthScreen(
                 uiState = uiState,
                 isEnrollmentMode = isEnrollmentFlow,        // ⬅️ NUEVO
                 captureBrightness = brightness,
-                onVerifyClicked = { authViewModel.onVerifyClicked() },
+                onVerifyClicked = {
+                    if (isEnrollmentFlow) {
+                        // Secuencia automática de 15 muestras
+                        authViewModel.onEnrollmentCaptureClicked()
+                    } else {
+                        // Login normal: verificación por parpadeo
+                        authViewModel.onVerifyClicked()
+                    }
+
+                },
                 // El botón de fallback usa el NavController (¡por eso lo conservamos!)
                 onUseFallbackClicked = onNavigateToFallback,
                 onPreviewReady = { previewView ->
@@ -172,13 +193,13 @@ fun GuidePanel(
 
             is LivenessState.FaceFound -> Triple(
                 "Rostro detectado",
-                "Mantén la posición y presiona “Verificar”.",
+                "Mantén la posición dentro del círculo. En unos instantes te pediremos que parpadees.",
                 MaterialTheme.colorScheme.primary
             )
 
             is LivenessState.AnalyzingBlink -> Triple(
-                "Parpadea",
-                "Parpadea suavemente, estamos analizando tu parpadeo.",
+                "Parpadea para reconocer tu rostro",
+                "Parpadea suavemente manteniendo tu rostro dentro del círculo para completar la verificación.",
                 MaterialTheme.colorScheme.primary
             )
 
@@ -258,8 +279,9 @@ private fun EnrollmentMiniPhases(state: LivenessState.Enrollment) {
     val currentIndex = state.current + 1 // 1-based
     val phaseText = when (currentIndex) {
         in 1..5 -> "Mira de frente con buena luz."
-        in 6..10 -> "Gira un poco la cabeza hacia los lados."
-        else -> "Acércate a una ventana o cambia ligeramente de luz."
+        in 6..10 -> "Mira hacia tu izquierda, sin salir del círculo."
+        in 11..15 -> "Mira hacia tu derecha, sin salir del círculo."
+        else -> "Mantén una expresión natural mientras terminamos de guardar tu rostro."
     }
 
     Text(
@@ -353,35 +375,35 @@ fun CameraPanel(
 
         Spacer(Modifier.height(16.dp))
 
-        val isVerifyEnabled = uiState is LivenessState.FaceFound || uiState is LivenessState.Enrollment
+        if (isEnrollmentMode) {
+            // Solo mostrar botón en modo reconfiguración de rostro
+            val enrollmentState = uiState as? LivenessState.Enrollment
+            val isCapturing =
+                enrollmentState != null &&
+                        enrollmentState.current > 0 &&
+                        enrollmentState.current < enrollmentState.total
 
-        val isAnalyzing = uiState is LivenessState.AnalyzingBlink
+            val isButtonEnabled = !isCapturing && enrollmentState != null
 
-        val isButtonEnabled =
-            !isAnalyzing && (
-                    uiState is LivenessState.FaceFound ||
-                            uiState is LivenessState.Error ||
-                            (isEnrollmentMode && uiState is LivenessState.Enrollment)
-                    )
+            val buttonText = if (isCapturing) {
+                "Capturando muestras..."
+            } else {
+                "Iniciar captura"
+            }
 
-        val buttonText = when {
-            isEnrollmentMode && isAnalyzing -> "Analizando gesto..."
-            isEnrollmentMode -> "Capturar muestra"
-            else -> "Verificar"
-        }
-
-        Button(
-            onClick = onVerifyClicked,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            enabled = isButtonEnabled
-        ) {
-            Text(
-                text = buttonText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Button(
+                onClick = onVerifyClicked,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                enabled = isButtonEnabled
+            ) {
+                Text(
+                    text = buttonText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))

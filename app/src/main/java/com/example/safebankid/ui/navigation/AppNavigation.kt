@@ -15,6 +15,7 @@ import com.example.safebankid.ui.auth.AuthViewModel
 import com.example.safebankid.ui.auth.LivenessState // ¡Importante!
 import com.example.safebankid.ui.dashboard.DashboardScreen
 import com.example.safebankid.ui.dashboard.DashboardViewModel
+import com.example.safebankid.ui.debug.MeshDebugScreen
 import com.example.safebankid.ui.fallback.FallbackPasswordScreen
 import com.example.safebankid.ui.fallback.FallbackPasswordViewModel
 import com.example.safebankid.ui.fallback.PasswordUiState // ¡Importante!
@@ -121,6 +122,10 @@ fun AppNavigation() {
                 navController = navController,
                 viewModel = dashboardViewModel
             )
+        }
+
+        composable("meshDebug") {
+            MeshDebugScreen()
         }
     }
 }

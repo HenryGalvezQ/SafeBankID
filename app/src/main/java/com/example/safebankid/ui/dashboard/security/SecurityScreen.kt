@@ -194,6 +194,17 @@ fun SecurityScreen(
             // O si usaste el getter:
             // FaceDatasetDebugCard(repository = viewModel.getRepository())
         }
+
+        item {
+            SecurityActionCard(
+                icon = Icons.Default.Face, // O el icono que prefieras
+                title = "Probar Face Mesh (468 Puntos)",
+                description = "Ver la malla 3D de MediaPipe en tiempo real",
+                onClick = {
+                    navController.navigate("meshDebug")
+                }
+            )
+        }
     }
 }
 
@@ -768,6 +779,34 @@ fun AppLockerPermissionCard() {
                 )
             ) {
                 Text(if (drawOverlayEnabled) "2. Dibujar sobre otras apps (✓ Activado)" else "2. Activar Superposición")
+            }
+            // --- ¡NUEVO BOTÓN PARA XIAOMI/POCO! ---
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    try {
+                        // Este Intent es específico de Xiaomi (MIUI)
+                        val intent = Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                            setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                            putExtra("extra_pkgname", context.packageName)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        // Si falla (no es Xiaomi), abre los ajustes normales
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                )
+            ) {
+                Text("3. (Xiaomi/Poco) Activar Ventanas Emergentes")
             }
         }
     }
